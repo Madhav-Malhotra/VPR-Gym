@@ -1,0 +1,39 @@
+# Build directories
+build/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Experiment outputs
+VprGym/exp/
+VprGym/work_folder/
+VprGym/my_results/
+VprGym/example/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation build
+doc/_build/
+
+# Test outputs
+*.log
+*.out

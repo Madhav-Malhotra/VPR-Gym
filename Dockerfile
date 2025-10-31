@@ -18,11 +18,22 @@ RUN apt-get update -qq \
     libeigen3-dev \
     libtbb-dev \
     python3-pip \
+    libzmq3-dev \
+    git \
+# Install cppzmq (header-only library)
+    && cd /tmp \
+    && git clone https://github.com/zeromq/cppzmq.git \
+    && cd cppzmq \
+    && mkdir build && cd build \
+    && cmake .. \
+    && make -j4 install \
+    && cd /workspace \
 # Install python packages
     && pip install -r requirements.txt \
+    && pip install -r VprGym/requirements.txt \
 # Cleanup
     && apt-get autoclean && apt-get clean && apt-get -y autoremove \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /tmp/cppzmq
 # Build VTR
 RUN make && make install
 # Container's default launch command

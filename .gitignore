@@ -23,6 +23,8 @@ vtr_flow/tasks/**/qor_geomean.txt
 vtr_flow/tasks/**/task_summary/
 quick_test/*
 temp/
+vtr_flow/benchmarks/titan_blif/*
+tmpxyring*
 
 #
 # Titan benchmarks
