@@ -4,7 +4,11 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV WORKSPACE=/workspace
 RUN mkdir -p ${WORKSPACE}
 WORKDIR ${WORKSPACE}
-COPY . ${WORKSPACE}
+
+# Copy only dependency files first (these change rarely)
+COPY install_apt_packages.sh requirements.txt ${WORKSPACE}/
+COPY VprGym/requirements.txt ${WORKSPACE}/VprGym/
+
 # Install and cleanup is done in one command to minimize the build cache size
 RUN apt-get update -qq \
 # Extract package names from install_apt_packages.sh
@@ -34,7 +38,25 @@ RUN apt-get update -qq \
 # Cleanup
     && apt-get autoclean && apt-get clean && apt-get -y autoremove \
     && rm -rf /var/lib/apt/lists/* /tmp/cppzmq
-# Build VTR
+
+# Copy source code needed for build (CMake files, Makefiles, source)
+COPY CMakeLists.txt Makefile ${WORKSPACE}/
+COPY cmake ${WORKSPACE}/cmake/
+COPY libs ${WORKSPACE}/libs/
+COPY vpr ${WORKSPACE}/vpr/
+COPY ODIN_II ${WORKSPACE}/ODIN_II/
+COPY abc ${WORKSPACE}/abc/
+COPY ace2 ${WORKSPACE}/ace2/
+COPY utils ${WORKSPACE}/utils/
+COPY blifexplorer ${WORKSPACE}/blifexplorer/
+COPY verilog_preprocessor ${WORKSPACE}/verilog_preprocessor/
+
+# Build VTR (this layer will be cached unless source code changes)
 RUN make && make install
+
+# Copy the rest of the project (benchmarks, Python code, etc.)
+# This layer will rebuild when you add Titan benchmarks, but won't rebuild dependencies or VTR
+COPY . ${WORKSPACE}
+
 # Container's default launch command
 SHELL ["/bin/bash", "-c"]

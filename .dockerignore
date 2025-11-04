@@ -37,3 +37,11 @@ doc/_build/
 # Test outputs
 *.log
 *.out
+
+# Large archives (benchmarks will be copied from extracted directories)
+*.tar.gz
+*.tar.bz2
+*.zip
+
+# Extracted titan benchmarks are large but WILL be copied in final layer
+# (Docker will cache earlier layers, so this only happens once)
