@@ -1,0 +1,79 @@
+{
+  "config": {
+    "reward_threshold": 1e-05,
+    "exploration_rate": 0.1,
+    "inner_num": 0.1,
+    "seed": 0,
+    "benchmark": "vtr_flow/benchmarks/titan_blif/stereo_vision_stratixiv_arch_timing.blif",
+    "reward_func": "WLbiased_runtime_aware"
+  },
+  "stages": [
+    {
+      "stage": 1,
+      "num_actions": 4,
+      "steps": [],
+      "final_statistics": {
+        "states": {
+          "0": "SB",
+          "1": "SB",
+          "2": "SB",
+          "3": "SB"
+        },
+        "action_counts": [
+          148670,
+          196738,
+          161328,
+          182130
+        ],
+        "avg_rewards": [
+          1.2536537297369587e-05,
+          1.570538990942154e-05,
+          6.689520727956567e-06,
+          1.64845000823579e-05
+        ],
+        "total_steps": 688867
+      }
+    },
+    {
+      "stage": 2,
+      "num_actions": 7,
+      "steps": [],
+      "final_statistics": {
+        "states": {
+          "0": "SB",
+          "1": "SB",
+          "2": "SB",
+          "3": "SB",
+          "4": "SB",
+          "5": "SB",
+          "6": "SB"
+        },
+        "action_counts": [
+          163936,
+          211675,
+          176428,
+          197221,
+          15096,
+          15132,
+          14880
+        ],
+        "avg_rewards": [
+          1.1890384052312657e-05,
+          1.4689164993503136e-05,
+          6.182408687962036e-06,
+          1.5397898803879148e-05,
+          2.447270800211976e-06,
+          1.421953476077188e-06,
+          4.394354838709679e-06
+        ],
+        "total_steps": 794370
+      }
+    }
+  ],
+  "results": {
+    "wire_length": 614181,
+    "critical_path_delay": 7.33072,
+    "runtime": 197.24,
+    "total_swaps": 798301
+  }
+}

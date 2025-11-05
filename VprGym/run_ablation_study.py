@@ -118,11 +118,6 @@ def run_ablation_study():
         if result:
             study_results["experiments"].append(result)
 
-            # Save intermediate results
-            results_file = output_dir / "ablation_study_results.json"
-            with open(results_file, "w") as f:
-                json.dump(study_results, f, indent=2)
-
     # Generate comparison summary
     print(f"\n\n{'='*60}")
     print("ABLATION STUDY COMPLETE")
