@@ -12,7 +12,7 @@ import subprocess
 import sys
 
 
-def run_experiment(script_name, experiment_name, port):
+def run_experiment(script_name, experiment_name, port, output_dir):
     """
     Run a single experiment in the current process.
 
@@ -20,6 +20,7 @@ def run_experiment(script_name, experiment_name, port):
         script_name: Python script to run (e.g., 'example.py')
         experiment_name: Name for logging
         port: ZMQ port to use
+        output_dir: Base output directory for the ablation study
     """
     print(f"\n{'='*60}")
     print(f"Running: {experiment_name}")
@@ -32,15 +33,18 @@ def run_experiment(script_name, experiment_name, port):
     # Import and run the appropriate experiment
     if 'example' in script_name:
         # Random agent
-        import example
-        result = {'status': 'completed', 'agent': 'random'}
+        from example import run_random_experiment
+        result = run_random_experiment(
+            port=port,
+            output_dir=str(output_dir / 'random')
+        )
 
     elif 'fsm' in script_name:
         # FSM agent
         from fsm_agent import run_fsm_experiment
         result = run_fsm_experiment(
             port=port,
-            output_dir=f'ablation_results/fsm_{port}'
+            output_dir=str(output_dir / 'fsm')
         )
 
     elif 'epsilon' in script_name:
@@ -48,7 +52,7 @@ def run_experiment(script_name, experiment_name, port):
         from epsilon_greedy_agent import run_epsilon_greedy_experiment
         result = run_epsilon_greedy_experiment(
             port=port,
-            output_dir=f'ablation_results/epsilon_greedy_{port}'
+            output_dir=str(output_dir / 'epsilon_greedy')
         )
 
     else:
@@ -73,7 +77,7 @@ def run_ablation_study():
     """
 
     timestamp = time.strftime('%Y%m%d_%H%M%S')
-    output_dir = Path(f'ablation_results/study_{timestamp}')
+    output_dir = Path(f'exp/{timestamp}/ablation_study')
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"=== Ablation Study ===")
@@ -114,7 +118,7 @@ def run_ablation_study():
         print(f"# {exp['description']}")
         print(f"{'#'*60}")
 
-        result = run_experiment(exp['script'], exp['name'], exp['port'])
+        result = run_experiment(exp['script'], exp['name'], exp['port'], output_dir)
 
         if result:
             study_results['experiments'].append(result)
@@ -169,7 +173,7 @@ def run_parallel_comparison(benchmark='vtr_flow/benchmarks/blif/mkDelayWorker32B
     print()
 
 
-def analyze_logs(log_dir='ablation_results'):
+def analyze_logs(log_dir='exp'):
     """
     Analyze experiment logs to compare agent performance.
     """
@@ -244,7 +248,74 @@ def analyze_logs(log_dir='ablation_results'):
 
     print(f"Comparison saved to: {comparison_file}")
 
+    # Compile all summary CSVs into a single comparison file
+    compile_summary_csvs(log_path)
+
     return comparison
+
+
+def compile_summary_csvs(log_dir='exp'):
+    """
+    Find all summary CSV files and compile them into a single comparison CSV.
+    """
+    log_path = Path(log_dir)
+
+    print(f"\n=== Compiling Summary CSVs ===")
+
+    # Find all summary CSV files
+    random_summaries = list(log_path.glob('**/random_summary_*.csv'))
+    fsm_summaries = list(log_path.glob('**/fsm_summary_*.csv'))
+    epsilon_summaries = list(log_path.glob('**/epsilon_greedy_summary_*.csv'))
+
+    print(f"Found {len(random_summaries)} Random summaries")
+    print(f"Found {len(fsm_summaries)} FSM summaries")
+    print(f"Found {len(epsilon_summaries)} Epsilon-Greedy summaries")
+
+    if not (random_summaries or fsm_summaries or epsilon_summaries):
+        print("No summary CSV files found.")
+        return
+
+    # Create combined summary CSV
+    combined_csv = log_path / 'combined_summary.csv'
+
+    import csv
+    with open(combined_csv, 'w', newline='') as f:
+        fieldnames = [
+            'agent', 'timestamp', 'wire_length', 'critical_path_delay',
+            'runtime', 'total_swaps', 'total_steps', 'epsilon',
+            'reward_threshold', 'exploration_rate'
+        ]
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+
+        # Process each summary file
+        for summary_file in random_summaries + fsm_summaries + epsilon_summaries:
+            # Extract timestamp from filename
+            timestamp = summary_file.stem.split('_')[-1]
+
+            with open(summary_file, 'r') as sf:
+                reader = csv.DictReader(sf)
+                for row in reader:
+                    writer.writerow({
+                        'agent': row.get('agent', 'unknown'),
+                        'timestamp': timestamp,
+                        'wire_length': row.get('wire_length', ''),
+                        'critical_path_delay': row.get('critical_path_delay', ''),
+                        'runtime': row.get('runtime', ''),
+                        'total_swaps': row.get('total_swaps', ''),
+                        'total_steps': row.get('total_steps', ''),
+                        'epsilon': row.get('epsilon', ''),
+                        'reward_threshold': row.get('reward_threshold', ''),
+                        'exploration_rate': row.get('exploration_rate', '')
+                    })
+
+    print(f"\nCombined summary saved to: {combined_csv}")
+    print("\nYou can now analyze results with:")
+    print(f"  import pandas as pd")
+    print(f"  df = pd.read_csv('{combined_csv}')")
+    print(f"  df.groupby('agent')[['wire_length', 'critical_path_delay']].mean()")
+
+    return combined_csv
 
 
 if __name__ == '__main__':
@@ -257,11 +328,15 @@ if __name__ == '__main__':
         elif sys.argv[1] == 'parallel':
             # Show parallel run instructions
             run_parallel_comparison()
+        elif sys.argv[1] == 'compile':
+            # Compile summary CSVs
+            compile_summary_csvs()
         else:
             print("Usage:")
             print("  python3 run_ablation_study.py          # Run sequential ablation study")
             print("  python3 run_ablation_study.py analyze  # Analyze existing logs")
             print("  python3 run_ablation_study.py parallel # Show parallel run instructions")
+            print("  python3 run_ablation_study.py compile  # Compile all summary CSVs into one file")
     else:
         # Run ablation study
         print("Note: This will run experiments sequentially (may take a long time)")

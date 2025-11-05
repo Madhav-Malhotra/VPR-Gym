@@ -54,9 +54,37 @@ COPY verilog_preprocessor ${WORKSPACE}/verilog_preprocessor/
 # Build VTR (this layer will be cached unless source code changes)
 RUN make && make install
 
-# Copy the rest of the project (benchmarks, Python code, etc.)
-# This layer will rebuild when you add Titan benchmarks, but won't rebuild dependencies or VTR
-COPY . ${WORKSPACE}
+# Copy only the essential benchmarks and architectures to reduce image size
+# This avoids copying large Titan benchmark directories (8.2GB+)
+# Note: Only includes stratixiv architecture and mkDelayWorker32B benchmark
+
+# Copy VPR flow essential directories
+COPY vtr_flow/scripts ${WORKSPACE}/vtr_flow/scripts/
+COPY vtr_flow/tasks ${WORKSPACE}/vtr_flow/tasks/
+COPY vtr_flow/misc ${WORKSPACE}/vtr_flow/misc/
+COPY vtr_flow/parse ${WORKSPACE}/vtr_flow/parse/
+COPY vtr_flow/sdc ${WORKSPACE}/vtr_flow/sdc/
+COPY vtr_flow/tech ${WORKSPACE}/vtr_flow/tech/
+COPY vtr_flow/primitives.v ${WORKSPACE}/vtr_flow/primitives.v
+
+# Copy only the stratixiv architecture (used in ablation study)
+RUN mkdir -p ${WORKSPACE}/vtr_flow/arch/titan ${WORKSPACE}/vtr_flow/arch/common
+COPY vtr_flow/arch/titan/stratixiv_arch.timing.xml ${WORKSPACE}/vtr_flow/arch/titan/
+COPY vtr_flow/arch/common/ ${WORKSPACE}/vtr_flow/arch/common/
+
+# Copy minimal benchmarks (only the small blif directory - 47MB, and verilog for mkDelayWorker32B)
+# Also includes the stereo_vision benchmark used by example.py
+# Excludes most of titan_blif (8.2GB) and titan_other_blif (509MB)
+COPY vtr_flow/benchmarks/blif ${WORKSPACE}/vtr_flow/benchmarks/blif/
+RUN mkdir -p ${WORKSPACE}/vtr_flow/benchmarks/verilog ${WORKSPACE}/vtr_flow/benchmarks/titan_blif
+COPY vtr_flow/benchmarks/verilog/mkDelayWorker32B.v ${WORKSPACE}/vtr_flow/benchmarks/verilog/
+COPY vtr_flow/benchmarks/titan_blif/stereo_vision_stratixiv_arch_timing.blif ${WORKSPACE}/vtr_flow/benchmarks/titan_blif/
+
+# Copy Python VprGym code
+COPY VprGym ${WORKSPACE}/VprGym/
+
+# Copy root-level project files
+COPY *.py *.sh *.md ${WORKSPACE}/
 
 # Container's default launch command
 SHELL ["/bin/bash", "-c"]

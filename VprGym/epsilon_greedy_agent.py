@@ -11,8 +11,10 @@ import numpy as np
 from numpy.random import randint
 from src.vprGym import VprEnv
 import json
+import csv
 import time
 from pathlib import Path
+import os
 
 
 class EpsilonGreedyAgent:
@@ -87,15 +89,17 @@ class EpsilonGreedyAgent:
     def get_statistics(self):
         """Get current agent statistics."""
         stats = {
-            'Q_values': self.Q.tolist(),
-            'action_counts': self.action_counts.tolist(),
-            'reward_sums': self.reward_sums.tolist(),
-            'avg_rewards': [np.mean(r) if r else 0.0 for r in self.action_rewards],
-            'std_rewards': [np.std(r) if r else 0.0 for r in self.action_rewards],
-            'total_steps': self.step_count,
-            'exploration_count': self.exploration_count,
-            'exploitation_count': self.exploitation_count,
-            'exploration_rate': self.exploration_count / self.step_count if self.step_count > 0 else 0
+            "Q_values": self.Q.tolist(),
+            "action_counts": self.action_counts.tolist(),
+            "reward_sums": self.reward_sums.tolist(),
+            "avg_rewards": [np.mean(r) if r else 0.0 for r in self.action_rewards],
+            "std_rewards": [np.std(r) if r else 0.0 for r in self.action_rewards],
+            "total_steps": self.step_count,
+            "exploration_count": self.exploration_count,
+            "exploitation_count": self.exploitation_count,
+            "exploration_rate": (
+                self.exploration_count / self.step_count if self.step_count > 0 else 0
+            ),
         }
         return stats
 
@@ -114,76 +118,100 @@ class EpsilonGreedyAgent:
         self.reward_sums = np.zeros(new_num_actions, dtype=float)
 
         # Copy over existing values
-        self.Q[:len(old_Q)] = old_Q
-        self.action_counts[:len(old_counts)] = old_counts
-        self.reward_sums[:len(old_sums)] = old_sums
+        self.Q[: len(old_Q)] = old_Q
+        self.action_counts[: len(old_counts)] = old_counts
+        self.reward_sums[: len(old_sums)] = old_sums
 
         # Extend reward history
         if new_num_actions > len(self.action_rewards):
-            self.action_rewards.extend([[] for _ in range(new_num_actions - len(self.action_rewards))])
+            self.action_rewards.extend(
+                [[] for _ in range(new_num_actions - len(self.action_rewards))]
+            )
 
 
 def run_epsilon_greedy_experiment(
     inner_num=0.1,
-    port='5555',
+    port="5555",
     seed=0,
-    arch='vtr_flow/arch/titan/stratixiv_arch.timing.xml',
-    benchmark='vtr_flow/benchmarks/blif/mkDelayWorker32B.blif',
-    reward_func='WLbiased_runtime_aware',
+    arch="vtr_flow/arch/titan/stratixiv_arch.timing.xml",
+    benchmark="vtr_flow/benchmarks/titan_blif/stereo_vision_stratixiv_arch_timing.blif",
+    reward_func="WLbiased_runtime_aware",
     epsilon=0.1,
-    output_dir='epsilon_greedy_results'
+    output_dir=None,
+    print_steps=1000,
+    log_steps=2,
 ):
     """Run epsilon-greedy agent experiment."""
 
-    # Create output directory
-    output_path = Path(output_dir)
-    output_path.mkdir(exist_ok=True)
+    # Setup logging with timestamp
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
 
-    # Setup logging
-    timestamp = time.strftime('%Y%m%d_%H%M%S')
-    log_file = output_path / f'epsilon_greedy_log_{timestamp}.json'
+    # Create output directory structure: exp/{timestamp}/epsilon_greedy/
+    if output_dir is None:
+        output_path = Path(f"exp/{timestamp}/epsilon_greedy")
+    else:
+        output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
 
     print(f"=== Epsilon-Greedy Agent Experiment ===")
     print(f"Epsilon: {epsilon}")
     print(f"Benchmark: {benchmark}")
-    print(f"Log file: {log_file}")
     print()
 
     # Create environment
+    print("Before env configured: ", os.getcwd())
     env = VprEnv(
         inner_num=inner_num,
         port=port,
         seed=seed,
         arch=arch,
-        directory=output_dir,
+        directory=str(output_path),
         benchmark=benchmark,
-        reward_func=reward_func
+        reward_func=reward_func,
     )
+    print("After env configured: ", os.getcwd())
+    log_file = os.path.join(os.getcwd(), "log.json")
+    csv_file = os.path.join(os.getcwd(), "log.csv")
 
     # Create agent
-    agent = EpsilonGreedyAgent(
-        num_actions=env.num_actions,
-        epsilon=epsilon
-    )
+    agent = EpsilonGreedyAgent(num_actions=env.num_actions, epsilon=epsilon)
 
     # Experiment tracking
     episode_log = {
-        'config': {
-            'epsilon': epsilon,
-            'inner_num': inner_num,
-            'seed': seed,
-            'benchmark': benchmark,
-            'reward_func': reward_func
+        "config": {
+            "agent": "epsilon_greedy",
+            "epsilon": epsilon,
+            "inner_num": inner_num,
+            "seed": seed,
+            "benchmark": benchmark,
+            "reward_func": reward_func,
         },
-        'stages': []
+        "stages": [],
     }
 
+    # CSV writer setup
+    csv_file_handle = open(csv_file, "w", newline="")
+    csv_writer = csv.DictWriter(
+        csv_file_handle,
+        fieldnames=[
+            "stage",
+            "step",
+            "action",
+            "reward",
+            "Q_value",
+            "action_count",
+            "exploration",
+            "delta",
+            "delta_bb",
+            "delta_time",
+            "best_action",
+            "best_Q",
+        ],
+    )
+    csv_writer.writeheader()
+
     stage = 1
-    stage_data = {
-        'stage': stage,
-        'num_actions': env.num_actions,
-        'steps': []
-    }
+    stage_data = {"stage": stage, "num_actions": env.num_actions, "steps": []}
 
     done = False
     step = 0
@@ -201,64 +229,103 @@ def run_epsilon_greedy_experiment(
         _, reward, done, info = env.step(action)
 
         # Update agent
-        if isinstance(info, dict) and 'delta' in info:
+        if isinstance(info, dict) and "delta" in info:
             # Normal step with reward
             agent.update(action, reward)
 
             step += 1
             all_rewards.append(reward)
 
-            # Log step
-            step_data = {
-                'step': step,
-                'action': int(action),
-                'reward': float(reward),
-                'Q_value': float(agent.Q[action]),
-                'action_count': int(agent.action_counts[action]),
-                'exploration': was_exploration,
-                'delta': float(info['delta']),
-                'delta_bb': float(info['delta_bb']),
-                'delta_time': float(info['delta_time'])
-            }
-            stage_data['steps'].append(step_data)
+            # Write to CSV
+            if step % log_steps == 0:
+                csv_writer.writerow(
+                    {
+                        "stage": stage,
+                        "step": step,
+                        "action": int(action),
+                        "reward": float(reward),
+                        "Q_value": float(agent.Q[action]),
+                        "action_count": int(agent.action_counts[action]),
+                        "exploration": was_exploration,
+                        "delta": float(info["delta"]),
+                        "delta_bb": float(info["delta_bb"]),
+                        "delta_time": float(info["delta_time"]),
+                        "best_action": int(np.argmax(agent.Q)),
+                        "best_Q": float(np.max(agent.Q)),
+                    }
+                )
 
-            # Print progress every 100 steps
-            if step % 100 == 0:
+            # Print progress
+            if step % print_steps == 0:
                 stats = agent.get_statistics()
-                print(f"Step {step}: Action {action}, Reward {reward:.6f}, Q(a)={agent.Q[action]:.6f}")
+                print(
+                    f"Step {step}: Action {action}, Reward {reward:.6f}, Q(a)={agent.Q[action]:.6f}"
+                )
                 print(f"  Exploration rate: {stats['exploration_rate']:.2%}")
-                print(f"  Best Q-value: {np.max(agent.Q):.6f} (action {np.argmax(agent.Q)})")
+                print(
+                    f"  Best Q-value: {np.max(agent.Q):.6f} (action {np.argmax(agent.Q)})"
+                )
                 print(f"  Q-values: {[f'{q:.4f}' for q in agent.Q]}")
 
-        elif info == 'stage2':
+        elif info == "stage2":
             # Stage transition
             print(f"\n=== Transitioning to Stage 2 ===")
             print(f"Stage 1 completed: {step} steps")
 
             # Save stage 1 data
-            stage_data['final_statistics'] = agent.get_statistics()
-            episode_log['stages'].append(stage_data)
+            stage_data["final_statistics"] = agent.get_statistics()
+            episode_log["stages"].append(stage_data)
 
             # Reset for stage 2
             agent.reset_for_stage2(env.num_actions)
 
             stage = 2
-            stage_data = {
-                'stage': stage,
-                'num_actions': env.num_actions,
-                'steps': []
-            }
+            stage_data = {"stage": stage, "num_actions": env.num_actions, "steps": []}
 
             print(f"Stage 2: {env.num_actions} actions available")
             print()
 
-        elif info == 'reset':
+        elif info == "reset":
             # Agent reset
             print("Environment reset signal")
 
+    # Close CSV file
+    csv_file_handle.close()
+
     # Save final stage data
-    stage_data['final_statistics'] = agent.get_statistics()
-    episode_log['stages'].append(stage_data)
+    stage_data["final_statistics"] = agent.get_statistics()
+    episode_log["stages"].append(stage_data)
+
+    # Create summary CSV with final results
+    summary_csv = output_path / f"epsilon_greedy_summary_{timestamp}.csv"
+    with open(summary_csv, "w", newline="") as f:
+        summary_writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "agent",
+                "epsilon",
+                "wire_length",
+                "critical_path_delay",
+                "runtime",
+                "total_swaps",
+                "total_steps",
+                "exploration_rate",
+            ],
+        )
+        summary_writer.writeheader()
+        final_stats = agent.get_statistics()
+        summary_writer.writerow(
+            {
+                "agent": "epsilon_greedy",
+                "epsilon": epsilon,
+                "wire_length": info["WL"],
+                "critical_path_delay": info["CPD"],
+                "runtime": info["RT"],
+                "total_swaps": info["SWAP"],
+                "total_steps": final_stats["total_steps"],
+                "exploration_rate": final_stats["exploration_rate"],
+            }
+        )
 
     # Final results
     print("\n=== Experiment Complete ===")
@@ -269,40 +336,42 @@ def run_epsilon_greedy_experiment(
     print()
 
     # Add results to log
-    episode_log['results'] = {
-        'wire_length': info['WL'],
-        'critical_path_delay': info['CPD'],
-        'runtime': info['RT'],
-        'total_swaps': info['SWAP']
+    episode_log["results"] = {
+        "wire_length": info["WL"],
+        "critical_path_delay": info["CPD"],
+        "runtime": info["RT"],
+        "total_swaps": info["SWAP"],
     }
 
     # Add reward distribution analysis
-    episode_log['reward_analysis'] = {
-        'mean': float(np.mean(all_rewards)),
-        'std': float(np.std(all_rewards)),
-        'min': float(np.min(all_rewards)),
-        'max': float(np.max(all_rewards)),
-        'median': float(np.median(all_rewards)),
-        'percentiles': {
-            '25': float(np.percentile(all_rewards, 25)),
-            '50': float(np.percentile(all_rewards, 50)),
-            '75': float(np.percentile(all_rewards, 75)),
-            '90': float(np.percentile(all_rewards, 90)),
-            '95': float(np.percentile(all_rewards, 95))
-        }
+    episode_log["reward_analysis"] = {
+        "mean": float(np.mean(all_rewards)),
+        "std": float(np.std(all_rewards)),
+        "min": float(np.min(all_rewards)),
+        "max": float(np.max(all_rewards)),
+        "median": float(np.median(all_rewards)),
+        "percentiles": {
+            "25": float(np.percentile(all_rewards, 25)),
+            "50": float(np.percentile(all_rewards, 50)),
+            "75": float(np.percentile(all_rewards, 75)),
+            "90": float(np.percentile(all_rewards, 90)),
+            "95": float(np.percentile(all_rewards, 95)),
+        },
     }
 
     # Save complete log
-    with open(log_file, 'w') as f:
+    with open(log_file, "w") as f:
         json.dump(episode_log, f, indent=2)
 
-    print(f"Log saved to: {log_file}")
+    print(f"JSON log saved to: {log_file}")
+    print(f"CSV log saved to: {csv_file}")
+    print(f"Summary CSV saved to: {summary_csv}")
 
     # Print final statistics
     print("\n=== Final Agent Statistics ===")
-    for stage_data in episode_log['stages']:
+    for stage_data in episode_log["stages"]:
         print(f"\nStage {stage_data['stage']}:")
-        stats = stage_data['final_statistics']
+        stats = stage_data["final_statistics"]
         print(f"  Q-values: {[f'{q:.6f}' for q in stats['Q_values']]}")
         print(f"  Action counts: {stats['action_counts']}")
         print(f"  Avg rewards: {[f'{r:.6f}' for r in stats['avg_rewards']]}")
@@ -321,9 +390,6 @@ def run_epsilon_greedy_experiment(
     return episode_log
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Default experiment - you can modify these parameters
-    run_epsilon_greedy_experiment(
-        epsilon=0.1,  # 10% exploration
-        output_dir='epsilon_greedy_results'
-    )
+    run_epsilon_greedy_experiment(epsilon=0.1)  # 10% exploration

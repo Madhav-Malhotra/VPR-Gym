@@ -31,10 +31,6 @@ if [[ -n "$PYTHON_FILE" && ! -f "VprGym/$PYTHON_FILE" ]]; then
   exit 1
 fi
 
-# Create experiment output directory
-EXP_DIR="./VprGym/exp/${TIMESTAMP}"
-mkdir -p "$EXP_DIR"
-
 # Build docker command
 if [[ "$DETACHED" == true ]]; then
   # Detached mode
@@ -46,7 +42,6 @@ if [[ "$DETACHED" == true ]]; then
   echo "Starting experiment in detached mode..."
   echo "Container name: $CONTAINER_NAME"
   echo "Running: $PYTHON_FILE"
-  echo "Results will be saved to: $EXP_DIR"
 
   docker run -d --rm \
     --name "$CONTAINER_NAME" \
@@ -62,15 +57,12 @@ if [[ "$DETACHED" == true ]]; then
   echo ""
   echo "Check status with:"
   echo "  docker ps -f name=$CONTAINER_NAME"
-  echo ""
-  echo "Results location: $EXP_DIR"
 
 else
   # Interactive mode
   if [[ -n "$PYTHON_FILE" ]]; then
     # Run specific Python file interactively
     echo "Running $PYTHON_FILE in interactive mode..."
-    echo "Results will be saved to: $EXP_DIR"
 
     docker run -it --rm \
       --name "$CONTAINER_NAME" \
