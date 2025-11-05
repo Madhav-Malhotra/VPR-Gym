@@ -31,28 +31,26 @@ def run_experiment(script_name, experiment_name, port, output_dir):
     start_time = time.time()
 
     # Import and run the appropriate experiment
-    if 'example' in script_name:
+    if "example" in script_name:
         # Random agent
         from example import run_random_experiment
-        result = run_random_experiment(
-            port=port,
-            output_dir=str(output_dir / 'random')
-        )
 
-    elif 'fsm' in script_name:
+        result = run_random_experiment(port=port, output_dir=str(output_dir / "random"))
+
+    elif "fsm" in script_name:
         # FSM agent
         from fsm_agent import run_fsm_experiment
+
         result = run_fsm_experiment(
-            port=port,
-            output_dir=str(output_dir / 'fsm')
+            port=port, output_dir=str(output_dir / "fsm"), reward_threshold=0.00001
         )
 
-    elif 'epsilon' in script_name:
+    elif "epsilon" in script_name:
         # Epsilon-greedy agent
         from epsilon_greedy_agent import run_epsilon_greedy_experiment
+
         result = run_epsilon_greedy_experiment(
-            port=port,
-            output_dir=str(output_dir / 'epsilon_greedy')
+            port=port, output_dir=str(output_dir / "epsilon_greedy")
         )
 
     else:
@@ -64,10 +62,10 @@ def run_experiment(script_name, experiment_name, port, output_dir):
     print(f"\n{experiment_name} completed in {elapsed_time:.2f} seconds")
 
     return {
-        'experiment': experiment_name,
-        'script': script_name,
-        'elapsed_time': elapsed_time,
-        'result': result
+        "experiment": experiment_name,
+        "script": script_name,
+        "elapsed_time": elapsed_time,
+        "result": result,
     }
 
 
@@ -76,8 +74,8 @@ def run_ablation_study():
     Run complete ablation study comparing all agents.
     """
 
-    timestamp = time.strftime('%Y%m%d_%H%M%S')
-    output_dir = Path(f'exp/{timestamp}/ablation_study')
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    output_dir = Path(f"exp/{timestamp}/ablation_study")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"=== Ablation Study ===")
@@ -87,29 +85,26 @@ def run_ablation_study():
     # Define experiments to run
     experiments = [
         {
-            'name': 'Random Agent',
-            'script': 'example.py',
-            'port': '5555',
-            'description': 'Baseline: Random action selection'
+            "name": "Random Agent",
+            "script": "example.py",
+            "port": "5555",
+            "description": "Baseline: Random action selection",
         },
         {
-            'name': 'FSM Agent (threshold=0.0)',
-            'script': 'fsm_agent.py',
-            'port': '5556',
-            'description': 'FSM with branch-predictor style states'
+            "name": "FSM Agent (threshold=0.0)",
+            "script": "fsm_agent.py",
+            "port": "5556",
+            "description": "FSM with branch-predictor style states",
         },
         {
-            'name': 'Epsilon-Greedy Agent (ε=0.1)',
-            'script': 'epsilon_greedy_agent.py',
-            'port': '5557',
-            'description': 'Action-value with sample average and ε-greedy'
-        }
+            "name": "Epsilon-Greedy Agent (ε=0.1)",
+            "script": "epsilon_greedy_agent.py",
+            "port": "5557",
+            "description": "Action-value with sample average and ε-greedy",
+        },
     ]
 
-    study_results = {
-        'timestamp': timestamp,
-        'experiments': []
-    }
+    study_results = {"timestamp": timestamp, "experiments": []}
 
     # Run each experiment sequentially (to avoid port conflicts)
     for exp in experiments:
@@ -118,14 +113,14 @@ def run_ablation_study():
         print(f"# {exp['description']}")
         print(f"{'#'*60}")
 
-        result = run_experiment(exp['script'], exp['name'], exp['port'], output_dir)
+        result = run_experiment(exp["script"], exp["name"], exp["port"], output_dir)
 
         if result:
-            study_results['experiments'].append(result)
+            study_results["experiments"].append(result)
 
             # Save intermediate results
-            results_file = output_dir / 'ablation_study_results.json'
-            with open(results_file, 'w') as f:
+            results_file = output_dir / "ablation_study_results.json"
+            with open(results_file, "w") as f:
                 json.dump(study_results, f, indent=2)
 
     # Generate comparison summary
@@ -137,214 +132,11 @@ def run_ablation_study():
     print(f"{'Agent':<30} {'Time (s)':<12} {'Status':<12}")
     print("-" * 60)
 
-    for exp in study_results['experiments']:
+    for exp in study_results["experiments"]:
         print(f"{exp['experiment']:<30} {exp['elapsed_time']:<12.2f} {'✓':<12}")
-
-    print(f"\nResults saved to: {results_file}")
 
     return study_results
 
 
-def run_parallel_comparison(benchmark='vtr_flow/benchmarks/blif/mkDelayWorker32B.blif'):
-    """
-    Run all three agents in parallel on the same benchmark for direct comparison.
-
-    Note: This requires running in separate processes or Docker containers
-    with different ports.
-    """
-
-    print(f"=== Parallel Comparison ===")
-    print(f"Benchmark: {benchmark}")
-    print(f"\nRun these commands in separate terminals:")
-    print()
-    print("Terminal 1 (Random):")
-    print("  cd VprGym && python3 example.py")
-    print()
-    print("Terminal 2 (FSM):")
-    print("  cd VprGym && python3 fsm_agent.py")
-    print()
-    print("Terminal 3 (Epsilon-Greedy):")
-    print("  cd VprGym && python3 epsilon_greedy_agent.py")
-    print()
-    print("Or using Docker:")
-    print("  ./run_docker.sh -D example.py")
-    print("  ./run_docker.sh -D fsm_agent.py")
-    print("  ./run_docker.sh -D epsilon_greedy_agent.py")
-    print()
-
-
-def analyze_logs(log_dir='exp'):
-    """
-    Analyze experiment logs to compare agent performance.
-    """
-    log_path = Path(log_dir)
-
-    print(f"=== Log Analysis ===")
-    print(f"Analyzing logs in: {log_path}")
-    print()
-
-    # Find all log files
-    fsm_logs = list(log_path.glob('**/fsm_log_*.json'))
-    epsilon_logs = list(log_path.glob('**/epsilon_greedy_log_*.json'))
-
-    print(f"Found {len(fsm_logs)} FSM logs")
-    print(f"Found {len(epsilon_logs)} Epsilon-Greedy logs")
-    print()
-
-    comparison = {
-        'FSM': [],
-        'Epsilon-Greedy': []
-    }
-
-    # Analyze FSM logs
-    for log_file in fsm_logs:
-        with open(log_file) as f:
-            data = json.load(f)
-            comparison['FSM'].append({
-                'file': str(log_file),
-                'results': data.get('results', {}),
-                'config': data.get('config', {})
-            })
-
-    # Analyze Epsilon-Greedy logs
-    for log_file in epsilon_logs:
-        with open(log_file) as f:
-            data = json.load(f)
-            comparison['Epsilon-Greedy'].append({
-                'file': str(log_file),
-                'results': data.get('results', {}),
-                'config': data.get('config', {}),
-                'reward_analysis': data.get('reward_analysis', {})
-            })
-
-    # Print comparison
-    print("\n=== Performance Comparison ===\n")
-
-    for agent_name, runs in comparison.items():
-        if not runs:
-            continue
-
-        print(f"{agent_name}:")
-        for i, run in enumerate(runs, 1):
-            results = run['results']
-            print(f"  Run {i}:")
-            print(f"    Wire Length: {results.get('wire_length', 'N/A')}")
-            print(f"    Critical Path Delay: {results.get('critical_path_delay', 'N/A')}")
-            print(f"    Runtime: {results.get('runtime', 'N/A')}")
-            print(f"    Total Swaps: {results.get('total_swaps', 'N/A')}")
-
-            # Print reward statistics for epsilon-greedy
-            if 'reward_analysis' in run:
-                ra = run['reward_analysis']
-                print(f"    Reward Mean: {ra.get('mean', 'N/A'):.6f}")
-                print(f"    Reward Std: {ra.get('std', 'N/A'):.6f}")
-
-        print()
-
-    # Save comparison
-    comparison_file = log_path / 'comparison_summary.json'
-    with open(comparison_file, 'w') as f:
-        json.dump(comparison, f, indent=2)
-
-    print(f"Comparison saved to: {comparison_file}")
-
-    # Compile all summary CSVs into a single comparison file
-    compile_summary_csvs(log_path)
-
-    return comparison
-
-
-def compile_summary_csvs(log_dir='exp'):
-    """
-    Find all summary CSV files and compile them into a single comparison CSV.
-    """
-    log_path = Path(log_dir)
-
-    print(f"\n=== Compiling Summary CSVs ===")
-
-    # Find all summary CSV files
-    random_summaries = list(log_path.glob('**/random_summary_*.csv'))
-    fsm_summaries = list(log_path.glob('**/fsm_summary_*.csv'))
-    epsilon_summaries = list(log_path.glob('**/epsilon_greedy_summary_*.csv'))
-
-    print(f"Found {len(random_summaries)} Random summaries")
-    print(f"Found {len(fsm_summaries)} FSM summaries")
-    print(f"Found {len(epsilon_summaries)} Epsilon-Greedy summaries")
-
-    if not (random_summaries or fsm_summaries or epsilon_summaries):
-        print("No summary CSV files found.")
-        return
-
-    # Create combined summary CSV
-    combined_csv = log_path / 'combined_summary.csv'
-
-    import csv
-    with open(combined_csv, 'w', newline='') as f:
-        fieldnames = [
-            'agent', 'timestamp', 'wire_length', 'critical_path_delay',
-            'runtime', 'total_swaps', 'total_steps', 'epsilon',
-            'reward_threshold', 'exploration_rate'
-        ]
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-
-        # Process each summary file
-        for summary_file in random_summaries + fsm_summaries + epsilon_summaries:
-            # Extract timestamp from filename
-            timestamp = summary_file.stem.split('_')[-1]
-
-            with open(summary_file, 'r') as sf:
-                reader = csv.DictReader(sf)
-                for row in reader:
-                    writer.writerow({
-                        'agent': row.get('agent', 'unknown'),
-                        'timestamp': timestamp,
-                        'wire_length': row.get('wire_length', ''),
-                        'critical_path_delay': row.get('critical_path_delay', ''),
-                        'runtime': row.get('runtime', ''),
-                        'total_swaps': row.get('total_swaps', ''),
-                        'total_steps': row.get('total_steps', ''),
-                        'epsilon': row.get('epsilon', ''),
-                        'reward_threshold': row.get('reward_threshold', ''),
-                        'exploration_rate': row.get('exploration_rate', '')
-                    })
-
-    print(f"\nCombined summary saved to: {combined_csv}")
-    print("\nYou can now analyze results with:")
-    print(f"  import pandas as pd")
-    print(f"  df = pd.read_csv('{combined_csv}')")
-    print(f"  df.groupby('agent')[['wire_length', 'critical_path_delay']].mean()")
-
-    return combined_csv
-
-
-if __name__ == '__main__':
-    import sys
-
-    if len(sys.argv) > 1:
-        if sys.argv[1] == 'analyze':
-            # Analyze existing logs
-            analyze_logs()
-        elif sys.argv[1] == 'parallel':
-            # Show parallel run instructions
-            run_parallel_comparison()
-        elif sys.argv[1] == 'compile':
-            # Compile summary CSVs
-            compile_summary_csvs()
-        else:
-            print("Usage:")
-            print("  python3 run_ablation_study.py          # Run sequential ablation study")
-            print("  python3 run_ablation_study.py analyze  # Analyze existing logs")
-            print("  python3 run_ablation_study.py parallel # Show parallel run instructions")
-            print("  python3 run_ablation_study.py compile  # Compile all summary CSVs into one file")
-    else:
-        # Run ablation study
-        print("Note: This will run experiments sequentially (may take a long time)")
-        print("For faster results, run agents in parallel using separate Docker containers")
-        print()
-        response = input("Continue with sequential run? (y/n): ")
-        if response.lower() == 'y':
-            run_ablation_study()
-        else:
-            print("\nFor parallel execution, run:")
-            print("  python3 run_ablation_study.py parallel")
+if __name__ == "__main__":
+    run_ablation_study()

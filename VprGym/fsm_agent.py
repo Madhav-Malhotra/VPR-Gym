@@ -56,8 +56,7 @@ class FSMAgent:
 
         # Statistics tracking
         self.action_counts = np.zeros(num_actions, dtype=int)
-        self.action_rewards = [[] for _ in range(num_actions)]
-        self.state_history = []  # Track state transitions
+        self.action_rewards = [0.0 for _ in range(num_actions)]
         self.step_count = 0
 
     def select_action(self):
@@ -93,27 +92,17 @@ class FSMAgent:
 
         # Track statistics
         self.action_counts[action] += 1
-        self.action_rewards[action].append(reward)
-
-        # Log state transition
-        self.state_history.append(
-            {
-                "step": self.step_count,
-                "action": int(action),
-                "reward": float(reward),
-                "old_state": int(old_state),
-                "new_state": int(new_state),
-                "old_state_name": self.STATE_NAMES[old_state],
-                "new_state_name": self.STATE_NAMES[new_state],
-            }
-        )
+        self.action_rewards[action] += reward
 
     def get_statistics(self):
         """Get current agent statistics."""
         stats = {
             "states": {i: self.STATE_NAMES[s] for i, s in enumerate(self.states)},
             "action_counts": self.action_counts.tolist(),
-            "avg_rewards": [np.mean(r) if r else 0.0 for r in self.action_rewards],
+            "avg_rewards": [
+                r / self.action_counts[i] if self.action_counts[i] > 0 else 0.0
+                for i, r in enumerate(self.action_rewards)
+            ],
             "total_steps": self.step_count,
         }
         return stats
@@ -133,7 +122,7 @@ class FSMAgent:
                 self.action_counts, (0, new_num_actions - len(self.action_counts))
             )
             self.action_rewards.extend(
-                [[] for _ in range(new_num_actions - len(self.action_rewards))]
+                [0.0 for _ in range(new_num_actions - len(self.action_rewards))]
             )
 
 
@@ -253,8 +242,6 @@ def run_fsm_experiment(
                         "action": int(action),
                         "reward": float(reward),
                         "state": int(agent.states[action]),
-                        "state_name": agent.STATE_NAMES[agent.states[action]],
-                        "exploration": was_exploration,
                         "delta": float(info["delta"]),
                         "delta_bb": float(info["delta_bb"]),
                         "delta_time": float(info["delta_time"]),
@@ -297,37 +284,6 @@ def run_fsm_experiment(
     stage_data["final_statistics"] = agent.get_statistics()
     episode_log["stages"].append(stage_data)
 
-    # Create summary CSV with final results
-    summary_csv = output_path / f"fsm_summary_{timestamp}.csv"
-    with open(summary_csv, "w", newline="") as f:
-        summary_writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "agent",
-                "reward_threshold",
-                "exploration_rate",
-                "wire_length",
-                "critical_path_delay",
-                "runtime",
-                "total_swaps",
-                "total_steps",
-            ],
-        )
-        summary_writer.writeheader()
-        final_stats = agent.get_statistics()
-        summary_writer.writerow(
-            {
-                "agent": "fsm",
-                "reward_threshold": reward_threshold,
-                "exploration_rate": exploration_rate,
-                "wire_length": info["WL"],
-                "critical_path_delay": info["CPD"],
-                "runtime": info["RT"],
-                "total_swaps": info["SWAP"],
-                "total_steps": final_stats["total_steps"],
-            }
-        )
-
     # Final results
     print("\n=== Experiment Complete ===")
     print(f'Wire Length: {info["WL"]}')
@@ -344,16 +300,12 @@ def run_fsm_experiment(
         "total_swaps": info["SWAP"],
     }
 
-    # Add state transition history
-    episode_log["state_transitions"] = agent.state_history
-
     # Save complete log
     with open(log_file, "w") as f:
         json.dump(episode_log, f, indent=2)
 
     print(f"JSON log saved to: {log_file}")
     print(f"CSV log saved to: {csv_file}")
-    print(f"Summary CSV saved to: {summary_csv}")
 
     # Print final statistics
     print("\n=== Final Agent Statistics ===")
@@ -370,6 +322,6 @@ def run_fsm_experiment(
 if __name__ == "__main__":
     # Default experiment - you can modify these parameters
     run_fsm_experiment(
-        reward_threshold=0.0,  # Tune this based on reward distribution
+        reward_threshold=0.00001,  # Tune this based on reward distribution
         exploration_rate=0.1,  # 10% random exploration
     )

@@ -246,7 +246,6 @@ def run_epsilon_greedy_experiment(
                         "reward": float(reward),
                         "Q_value": float(agent.Q[action]),
                         "action_count": int(agent.action_counts[action]),
-                        "exploration": was_exploration,
                         "delta": float(info["delta"]),
                         "delta_bb": float(info["delta_bb"]),
                         "delta_time": float(info["delta_time"]),
@@ -296,37 +295,6 @@ def run_epsilon_greedy_experiment(
     stage_data["final_statistics"] = agent.get_statistics()
     episode_log["stages"].append(stage_data)
 
-    # Create summary CSV with final results
-    summary_csv = output_path / f"epsilon_greedy_summary_{timestamp}.csv"
-    with open(summary_csv, "w", newline="") as f:
-        summary_writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "agent",
-                "epsilon",
-                "wire_length",
-                "critical_path_delay",
-                "runtime",
-                "total_swaps",
-                "total_steps",
-                "exploration_rate",
-            ],
-        )
-        summary_writer.writeheader()
-        final_stats = agent.get_statistics()
-        summary_writer.writerow(
-            {
-                "agent": "epsilon_greedy",
-                "epsilon": epsilon,
-                "wire_length": info["WL"],
-                "critical_path_delay": info["CPD"],
-                "runtime": info["RT"],
-                "total_swaps": info["SWAP"],
-                "total_steps": final_stats["total_steps"],
-                "exploration_rate": final_stats["exploration_rate"],
-            }
-        )
-
     # Final results
     print("\n=== Experiment Complete ===")
     print(f'Wire Length: {info["WL"]}')
@@ -365,7 +333,6 @@ def run_epsilon_greedy_experiment(
 
     print(f"JSON log saved to: {log_file}")
     print(f"CSV log saved to: {csv_file}")
-    print(f"Summary CSV saved to: {summary_csv}")
 
     # Print final statistics
     print("\n=== Final Agent Statistics ===")
