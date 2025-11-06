@@ -1,132 +1,17 @@
 """
-Epsilon-Greedy Action-Value Agent
+Action-Value Agent Experiments
 
-Simple Q-learning style agent with:
-- Action-value estimates (Q-values) initialized to 0
-- Sample average for updating Q-values
-- Epsilon-greedy policy for action selection
+Runs experiments with configurable RL agents (epsilon-greedy, softmax, etc.)
 """
 
 import numpy as np
-from numpy.random import randint
 from src.vprGym import VprEnv
+from rl_agents import ActionValueAgent
 import json
 import csv
 import time
 from pathlib import Path
 import os
-
-
-class EpsilonGreedyAgent:
-    """
-    Simple action-value agent with epsilon-greedy policy.
-
-    Uses sample average to estimate action values:
-    Q(a) = average of rewards received when action a was taken
-    """
-
-    def __init__(self, num_actions, epsilon=0.1):
-        """
-        Initialize epsilon-greedy agent.
-
-        Args:
-            num_actions: Number of available actions
-            epsilon: Probability of taking random action (exploration)
-        """
-        self.num_actions = num_actions
-        self.epsilon = epsilon
-
-        # Action-value estimates (Q-values) - initialized to 0
-        self.Q = np.zeros(num_actions, dtype=float)
-
-        # Track number of times each action was selected
-        self.action_counts = np.zeros(num_actions, dtype=int)
-
-        # Track sum of rewards for each action (for sample average)
-        self.reward_sums = np.zeros(num_actions, dtype=float)
-
-        # Complete reward history for analysis
-        self.action_rewards = [[] for _ in range(num_actions)]
-
-        # Step tracking
-        self.step_count = 0
-        self.exploration_count = 0
-        self.exploitation_count = 0
-
-    def select_action(self):
-        """Select action using epsilon-greedy policy."""
-        self.step_count += 1
-
-        # Epsilon-greedy selection
-        if np.random.random() < self.epsilon:
-            # Exploration: random action
-            action = randint(self.num_actions)
-            self.exploration_count += 1
-            return action, True  # True = exploration
-        else:
-            # Exploitation: greedy action (max Q-value)
-            # Break ties randomly
-            max_q = np.max(self.Q)
-            best_actions = np.where(self.Q == max_q)[0]
-            action = np.random.choice(best_actions)
-            self.exploitation_count += 1
-            return action, False  # False = exploitation
-
-    def update(self, action, reward):
-        """Update Q-value using sample average."""
-        # Increment action count
-        self.action_counts[action] += 1
-
-        # Update reward sum
-        self.reward_sums[action] += reward
-
-        # Update Q-value (sample average)
-        self.Q[action] = self.reward_sums[action] / self.action_counts[action]
-
-        # Store complete reward history
-        self.action_rewards[action].append(reward)
-
-    def get_statistics(self):
-        """Get current agent statistics."""
-        stats = {
-            "Q_values": self.Q.tolist(),
-            "action_counts": self.action_counts.tolist(),
-            "reward_sums": self.reward_sums.tolist(),
-            "avg_rewards": [np.mean(r) if r else 0.0 for r in self.action_rewards],
-            "std_rewards": [np.std(r) if r else 0.0 for r in self.action_rewards],
-            "total_steps": self.step_count,
-            "exploration_count": self.exploration_count,
-            "exploitation_count": self.exploitation_count,
-            "exploration_rate": (
-                self.exploration_count / self.step_count if self.step_count > 0 else 0
-            ),
-        }
-        return stats
-
-    def reset_for_stage2(self, new_num_actions):
-        """Reset agent for stage 2 with different number of actions."""
-        # Preserve Q-values for actions that exist in both stages
-        old_Q = self.Q[:new_num_actions].copy()
-        old_counts = self.action_counts[:new_num_actions].copy()
-        old_sums = self.reward_sums[:new_num_actions].copy()
-
-        self.num_actions = new_num_actions
-
-        # Initialize new arrays
-        self.Q = np.zeros(new_num_actions, dtype=float)
-        self.action_counts = np.zeros(new_num_actions, dtype=int)
-        self.reward_sums = np.zeros(new_num_actions, dtype=float)
-
-        # Copy over existing values
-        self.Q[: len(old_Q)] = old_Q
-        self.action_counts[: len(old_counts)] = old_counts
-        self.reward_sums[: len(old_sums)] = old_sums
-
-        # Extend reward history
-        if new_num_actions > len(self.action_rewards):
-            self.action_rewards.extend(
-                [[] for _ in range(new_num_actions - len(self.action_rewards))]
-            )
 
 
 def run_epsilon_greedy_experiment(
@@ -136,12 +21,30 @@ def run_epsilon_greedy_experiment(
     arch="vtr_flow/arch/titan/stratixiv_arch.timing.xml",
     benchmark="vtr_flow/benchmarks/titan_blif/stereo_vision_stratixiv_arch_timing.blif",
     reward_func="WLbiased_runtime_aware",
+    policy='epsilon_greedy',
+    averaging='sample',
     epsilon=0.1,
+    temperature=1.0,
+    alpha=0.1,
     output_dir=None,
     print_steps=1000,
     log_steps=2,
+    timeout=None,
+    target_wl=None,
+    target_cpd=None,
 ):
-    """Run epsilon-greedy agent experiment."""
+    """Run action-value agent experiment.
+
+    Args:
+        policy: 'epsilon_greedy' or 'softmax'
+        averaging: 'sample' or 'exponential'
+        epsilon: For epsilon-greedy policy
+        temperature: For softmax policy
+        alpha: For exponential averaging
+        timeout: Time budget in seconds (None = no limit)
+        target_wl: Target wire length to reach (None = no target)
+        target_cpd: Target critical path delay to reach (None = no target)
+    """
 
     # Setup logging with timestamp
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -153,13 +56,11 @@ def run_epsilon_greedy_experiment(
         output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    print(f"=== Epsilon-Greedy Agent Experiment ===")
-    print(f"Epsilon: {epsilon}")
-    print(f"Benchmark: {benchmark}")
-    print()
+    print(f"=== Action-Value Agent Experiment ===")
+    print(f"Policy: {policy}, Averaging: {averaging}")
 
     # Create environment
-    print("Before env configured: ", os.getcwd())
+    prior_path = os.getcwd()
     env = VprEnv(
         inner_num=inner_num,
         port=port,
@@ -169,22 +70,34 @@ def run_epsilon_greedy_experiment(
         benchmark=benchmark,
         reward_func=reward_func,
     )
-    print("After env configured: ", os.getcwd())
     log_file = os.path.join(os.getcwd(), "log.json")
     csv_file = os.path.join(os.getcwd(), "log.csv")
 
     # Create agent
-    agent = EpsilonGreedyAgent(num_actions=env.num_actions, epsilon=epsilon)
+    agent = ActionValueAgent(
+        num_actions=env.num_actions,
+        policy=policy,
+        averaging=averaging,
+        epsilon=epsilon,
+        temperature=temperature,
+        alpha=alpha
+    )
 
     # Experiment tracking
     episode_log = {
         "config": {
-            "agent": "epsilon_greedy",
+            "policy": policy,
+            "averaging": averaging,
             "epsilon": epsilon,
+            "temperature": temperature,
+            "alpha": alpha,
             "inner_num": inner_num,
             "seed": seed,
             "benchmark": benchmark,
             "reward_func": reward_func,
+            "timeout": timeout,
+            "target_wl": target_wl,
+            "target_cpd": target_cpd,
         },
         "stages": [],
     }
@@ -219,11 +132,19 @@ def run_epsilon_greedy_experiment(
     # Track reward statistics for finding good epsilon
     all_rewards = []
 
+    # Start timer for timeout mode
+    experiment_start_time = time.time()
+
     print("Starting placement...")
 
     while not done:
+        # Check timeout
+        if timeout is not None and (time.time() - experiment_start_time) > timeout:
+            print(f"\nTimeout reached ({timeout}s), terminating experiment...")
+            episode_log["termination_reason"] = "timeout"
+            break
         # Select action
-        action, was_exploration = agent.select_action()
+        action = agent.select_action()
 
         # Take action in environment
         _, reward, done, info = env.step(action)
@@ -235,6 +156,16 @@ def run_epsilon_greedy_experiment(
 
             step += 1
             all_rewards.append(reward)
+
+            # Check target conditions
+            if target_wl is not None and "WL" in info and info["WL"] <= target_wl:
+                print(f"\nTarget wire length reached: {info['WL']} <= {target_wl}")
+                episode_log["termination_reason"] = "target_wl_reached"
+                done = True
+            elif target_cpd is not None and "CPD" in info and info["CPD"] <= target_cpd:
+                print(f"\nTarget CPD reached: {info['CPD']} <= {target_cpd}")
+                episode_log["termination_reason"] = "target_cpd_reached"
+                done = True
 
             # Write to CSV
             if step % log_steps == 0:
@@ -256,37 +187,19 @@ def run_epsilon_greedy_experiment(
 
             # Print progress
             if step % print_steps == 0:
-                stats = agent.get_statistics()
-                print(
-                    f"Step {step}: Action {action}, Reward {reward:.6f}, Q(a)={agent.Q[action]:.6f}"
-                )
-                print(f"  Exploration rate: {stats['exploration_rate']:.2%}")
-                print(
-                    f"  Best Q-value: {np.max(agent.Q):.6f} (action {np.argmax(agent.Q)})"
-                )
-                print(f"  Q-values: {[f'{q:.4f}' for q in agent.Q]}")
+                print(f"Step {step}: Reward {reward:.6f}, Best Q={np.max(agent.Q):.4f}")
 
         elif info == "stage2":
             # Stage transition
-            print(f"\n=== Transitioning to Stage 2 ===")
-            print(f"Stage 1 completed: {step} steps")
-
-            # Save stage 1 data
+            print(f"\n=== Stage 2: {step} steps completed ===")
             stage_data["final_statistics"] = agent.get_statistics()
             episode_log["stages"].append(stage_data)
-
-            # Reset for stage 2
             agent.reset_for_stage2(env.num_actions)
-
             stage = 2
             stage_data = {"stage": stage, "num_actions": env.num_actions, "steps": []}
 
-            print(f"Stage 2: {env.num_actions} actions available")
-            print()
-
         elif info == "reset":
-            # Agent reset
-            print("Environment reset signal")
+            print("Reset signal")
 
     # Close CSV file
     csv_file_handle.close()
@@ -297,33 +210,42 @@ def run_epsilon_greedy_experiment(
 
     # Final results
     print("\n=== Experiment Complete ===")
-    print(f'Wire Length: {info["WL"]}')
-    print(f'Critical Path Delay: {info["CPD"]}')
-    print(f'Runtime: {info["RT"]}')
-    print(f'Total Swaps: {info["SWAP"]}')
-    print()
+    try:
+        print(f'Wire Length: {info["WL"]}')
+        print(f'Critical Path Delay: {info["CPD"]}')
+        print(f'Runtime: {info["RT"]}')
+        print(f'Total Swaps: {info["SWAP"]}')
+        print()
 
-    # Add results to log
-    episode_log["results"] = {
-        "wire_length": info["WL"],
-        "critical_path_delay": info["CPD"],
-        "runtime": info["RT"],
-        "total_swaps": info["SWAP"],
-    }
+        # Add results to log
+        episode_log["results"] = {
+            "wire_length": info["WL"],
+            "critical_path_delay": info["CPD"],
+            "runtime": info["RT"],
+            "total_swaps": info["SWAP"],
+        }
+    except Exception as e:
+        print("ERROR: could not access final info: ", e)
+        episode_log["results"] = {}
+
+    # Add termination info
+    if "termination_reason" not in episode_log:
+        episode_log["termination_reason"] = "completed"
+    episode_log["elapsed_time"] = time.time() - experiment_start_time
 
     # Add reward distribution analysis
     episode_log["reward_analysis"] = {
-        "mean": float(np.mean(all_rewards)),
-        "std": float(np.std(all_rewards)),
-        "min": float(np.min(all_rewards)),
-        "max": float(np.max(all_rewards)),
-        "median": float(np.median(all_rewards)),
+        "mean": float(np.mean(all_rewards)) if all_rewards else 0.0,
+        "std": float(np.std(all_rewards)) if all_rewards else 0.0,
+        "min": float(np.min(all_rewards)) if all_rewards else 0.0,
+        "max": float(np.max(all_rewards)) if all_rewards else 0.0,
+        "median": float(np.median(all_rewards)) if all_rewards else 0.0,
         "percentiles": {
-            "25": float(np.percentile(all_rewards, 25)),
-            "50": float(np.percentile(all_rewards, 50)),
-            "75": float(np.percentile(all_rewards, 75)),
-            "90": float(np.percentile(all_rewards, 90)),
-            "95": float(np.percentile(all_rewards, 95)),
+            "25": float(np.percentile(all_rewards, 25)) if all_rewards else 0.0,
+            "50": float(np.percentile(all_rewards, 50)) if all_rewards else 0.0,
+            "75": float(np.percentile(all_rewards, 75)) if all_rewards else 0.0,
+            "90": float(np.percentile(all_rewards, 90)) if all_rewards else 0.0,
+            "95": float(np.percentile(all_rewards, 95)) if all_rewards else 0.0,
         },
     }
 
@@ -331,28 +253,10 @@ def run_epsilon_greedy_experiment(
     with open(log_file, "w") as f:
         json.dump(episode_log, f, indent=2)
 
-    print(f"JSON log saved to: {log_file}")
-    print(f"CSV log saved to: {csv_file}")
+    print(f"Logs: {log_file}, {csv_file}")
 
-    # Print final statistics
-    print("\n=== Final Agent Statistics ===")
-    for stage_data in episode_log["stages"]:
-        print(f"\nStage {stage_data['stage']}:")
-        stats = stage_data["final_statistics"]
-        print(f"  Q-values: {[f'{q:.6f}' for q in stats['Q_values']]}")
-        print(f"  Action counts: {stats['action_counts']}")
-        print(f"  Avg rewards: {[f'{r:.6f}' for r in stats['avg_rewards']]}")
-        print(f"  Std rewards: {[f'{r:.6f}' for r in stats['std_rewards']]}")
-        print(f"  Exploration rate: {stats['exploration_rate']:.2%}")
-
-    # Print reward distribution
-    print("\n=== Reward Distribution (for tuning hyperparameters) ===")
-    print(f"Mean: {episode_log['reward_analysis']['mean']:.6f}")
-    print(f"Std: {episode_log['reward_analysis']['std']:.6f}")
-    print(f"Min: {episode_log['reward_analysis']['min']:.6f}")
-    print(f"Max: {episode_log['reward_analysis']['max']:.6f}")
-    print(f"Median: {episode_log['reward_analysis']['median']:.6f}")
-    print(f"Percentiles: {episode_log['reward_analysis']['percentiles']}")
+    # Revert to base working dir
+    os.chdir(prior_path)
 
     return episode_log
 

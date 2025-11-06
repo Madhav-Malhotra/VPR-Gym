@@ -12,7 +12,7 @@ import subprocess
 import sys
 
 
-def run_experiment(script_name, experiment_name, port, output_dir):
+def run_experiment(script_name, experiment_name, port, output_dir, timeout=None, target_wl=None, target_cpd=None):
     """
     Run a single experiment in the current process.
 
@@ -21,6 +21,9 @@ def run_experiment(script_name, experiment_name, port, output_dir):
         experiment_name: Name for logging
         port: ZMQ port to use
         output_dir: Base output directory for the ablation study
+        timeout: Time budget in seconds (None = no limit)
+        target_wl: Target wire length to reach (None = no target)
+        target_cpd: Target critical path delay to reach (None = no target)
     """
     print(f"\n{'='*60}")
     print(f"Running: {experiment_name}")
@@ -35,14 +38,25 @@ def run_experiment(script_name, experiment_name, port, output_dir):
         # Random agent
         from example import run_random_experiment
 
-        result = run_random_experiment(port=port, output_dir=str(output_dir / "random"))
+        result = run_random_experiment(
+            port=port,
+            output_dir=str(output_dir / "random"),
+            timeout=timeout,
+            target_wl=target_wl,
+            target_cpd=target_cpd
+        )
 
     elif "fsm" in script_name:
         # FSM agent
         from fsm_agent import run_fsm_experiment
 
         result = run_fsm_experiment(
-            port=port, output_dir=str(output_dir / "fsm"), reward_threshold=0.00001
+            port=port,
+            output_dir=str(output_dir / "fsm"),
+            reward_threshold=0.00001,
+            timeout=timeout,
+            target_wl=target_wl,
+            target_cpd=target_cpd
         )
 
     elif "epsilon" in script_name:
@@ -50,7 +64,11 @@ def run_experiment(script_name, experiment_name, port, output_dir):
         from epsilon_greedy_agent import run_epsilon_greedy_experiment
 
         result = run_epsilon_greedy_experiment(
-            port=port, output_dir=str(output_dir / "epsilon_greedy")
+            port=port,
+            output_dir=str(output_dir / "epsilon_greedy"),
+            timeout=timeout,
+            target_wl=target_wl,
+            target_cpd=target_cpd
         )
 
     else:
@@ -69,9 +87,14 @@ def run_experiment(script_name, experiment_name, port, output_dir):
     }
 
 
-def run_ablation_study():
+def run_ablation_study(timeout=None, target_wl=None, target_cpd=None):
     """
     Run complete ablation study comparing all agents.
+
+    Args:
+        timeout: Time budget in seconds (None = run to completion)
+        target_wl: Target wire length to reach (None = no target)
+        target_cpd: Target critical path delay to reach (None = no target)
     """
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -79,6 +102,12 @@ def run_ablation_study():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"=== Ablation Study ===")
+    if timeout:
+        print(f"Time Budget: {timeout}s")
+    if target_wl:
+        print(f"Target Wire Length: {target_wl}")
+    if target_cpd:
+        print(f"Target CPD: {target_cpd}")
     print(f"Output directory: {output_dir}")
     print(f"Timestamp: {timestamp}")
 
@@ -91,13 +120,13 @@ def run_ablation_study():
             "description": "Baseline: Random action selection",
         },
         {
-            "name": "FSM Agent (threshold=0.0)",
+            "name": "FSM Agent",
             "script": "fsm_agent.py",
             "port": "5556",
             "description": "FSM with branch-predictor style states",
         },
         {
-            "name": "Epsilon-Greedy Agent (ε=0.1)",
+            "name": "Epsilon-Greedy Agent",
             "script": "epsilon_greedy_agent.py",
             "port": "5557",
             "description": "Action-value with sample average and ε-greedy",
@@ -113,7 +142,15 @@ def run_ablation_study():
         print(f"# {exp['description']}")
         print(f"{'#'*60}")
 
-        result = run_experiment(exp["script"], exp["name"], exp["port"], output_dir)
+        result = run_experiment(
+            exp["script"],
+            exp["name"],
+            exp["port"],
+            output_dir,
+            timeout=timeout,
+            target_wl=target_wl,
+            target_cpd=target_cpd
+        )
 
         if result:
             study_results["experiments"].append(result)

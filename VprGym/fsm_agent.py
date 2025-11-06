@@ -138,8 +138,17 @@ def run_fsm_experiment(
     output_dir=None,
     print_steps=1000,
     log_steps=2,
+    timeout=None,
+    target_wl=None,
+    target_cpd=None,
 ):
-    """Run FSM agent experiment."""
+    """Run FSM agent experiment.
+
+    Args:
+        timeout: Time budget in seconds (None = no limit)
+        target_wl: Target wire length to reach (None = no target)
+        target_cpd: Target critical path delay to reach (None = no target)
+    """
 
     # Setup logging with timestamp
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -158,7 +167,7 @@ def run_fsm_experiment(
     print()
 
     # Create environment
-    print("Before env configured: ", os.getcwd())
+    prior_path = os.getcwd()
     env = VprEnv(
         inner_num=inner_num,
         port=port,
@@ -168,7 +177,6 @@ def run_fsm_experiment(
         benchmark=benchmark,
         reward_func=reward_func,
     )
-    print("After env configured: ", os.getcwd())
     log_file = os.path.join(os.getcwd(), "log.json")
     csv_file = os.path.join(os.getcwd(), "log.csv")
 
@@ -182,12 +190,16 @@ def run_fsm_experiment(
     # Experiment tracking
     episode_log = {
         "config": {
+            "agent": "fsm",
             "reward_threshold": reward_threshold,
             "exploration_rate": exploration_rate,
             "inner_num": inner_num,
             "seed": seed,
             "benchmark": benchmark,
             "reward_func": reward_func,
+            "timeout": timeout,
+            "target_wl": target_wl,
+            "target_cpd": target_cpd,
         },
         "stages": [],
     }
@@ -218,9 +230,17 @@ def run_fsm_experiment(
     done = False
     step = 0
 
+    # Start timer for timeout mode
+    experiment_start_time = time.time()
+
     print("Starting placement...")
 
     while not done:
+        # Check timeout
+        if timeout is not None and (time.time() - experiment_start_time) > timeout:
+            print(f"\nTimeout reached ({timeout}s), terminating experiment...")
+            episode_log["termination_reason"] = "timeout"
+            break
         # Select action
         action, was_exploration = agent.select_action()
 
@@ -232,6 +252,16 @@ def run_fsm_experiment(
             # Normal step with reward
             agent.update(action, reward)
             step += 1
+
+            # Check target conditions
+            if target_wl is not None and "WL" in info and info["WL"] <= target_wl:
+                print(f"\nTarget wire length reached: {info['WL']} <= {target_wl}")
+                episode_log["termination_reason"] = "target_wl_reached"
+                done = True
+            elif target_cpd is not None and "CPD" in info and info["CPD"] <= target_cpd:
+                print(f"\nTarget CPD reached: {info['CPD']} <= {target_cpd}")
+                episode_log["termination_reason"] = "target_cpd_reached"
+                done = True
 
             # Write to CSV
             if step % log_steps == 0:
@@ -286,19 +316,28 @@ def run_fsm_experiment(
 
     # Final results
     print("\n=== Experiment Complete ===")
-    print(f'Wire Length: {info["WL"]}')
-    print(f'Critical Path Delay: {info["CPD"]}')
-    print(f'Runtime: {info["RT"]}')
-    print(f'Total Swaps: {info["SWAP"]}')
-    print()
+    try:
+        print(f'Wire Length: {info["WL"]}')
+        print(f'Critical Path Delay: {info["CPD"]}')
+        print(f'Runtime: {info["RT"]}')
+        print(f'Total Swaps: {info["SWAP"]}')
+        print()
 
-    # Add results to log
-    episode_log["results"] = {
-        "wire_length": info["WL"],
-        "critical_path_delay": info["CPD"],
-        "runtime": info["RT"],
-        "total_swaps": info["SWAP"],
-    }
+        # Add results to log
+        episode_log["results"] = {
+            "wire_length": info["WL"],
+            "critical_path_delay": info["CPD"],
+            "runtime": info["RT"],
+            "total_swaps": info["SWAP"],
+        }
+    except Exception as e:
+        print("ERROR: could not access final info: ", e)
+        episode_log["results"] = {}
+
+    # Add termination info
+    if "termination_reason" not in episode_log:
+        episode_log["termination_reason"] = "completed"
+    episode_log["elapsed_time"] = time.time() - experiment_start_time
 
     # Save complete log
     with open(log_file, "w") as f:
@@ -315,6 +354,9 @@ def run_fsm_experiment(
         print(f"  States: {stats['states']}")
         print(f"  Action counts: {stats['action_counts']}")
         print(f"  Avg rewards: {[f'{r:.6f}' for r in stats['avg_rewards']]}")
+
+    # Revert base folder
+    os.chdir(prior_path)
 
     return episode_log
 

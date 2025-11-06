@@ -25,8 +25,17 @@ def run_random_experiment(
     output_dir=None,
     print_steps=1000,
     log_steps=2,
+    timeout=None,
+    target_wl=None,
+    target_cpd=None,
 ):
-    """Run random agent experiment with comprehensive logging."""
+    """Run random agent experiment with comprehensive logging.
+
+    Args:
+        timeout: Time budget in seconds (None = no limit)
+        target_wl: Target wire length to reach (None = no target)
+        target_cpd: Target critical path delay to reach (None = no target)
+    """
 
     # Setup logging with timestamp
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -43,7 +52,7 @@ def run_random_experiment(
     print()
 
     # Create environment
-    print("Before env configured: ", os.getcwd())
+    prior_path = os.getcwd()
     env = VprEnv(
         inner_num=inner_num,
         port=port,
@@ -53,7 +62,6 @@ def run_random_experiment(
         benchmark=benchmark,
         reward_func=reward_func,
     )
-    print("After env configured: ", os.getcwd())
     log_file = os.path.join(os.getcwd(), "log.json")
     csv_file = os.path.join(os.getcwd(), "log.csv")
 
@@ -65,6 +73,9 @@ def run_random_experiment(
             "seed": seed,
             "benchmark": benchmark,
             "reward_func": reward_func,
+            "timeout": timeout,
+            "target_wl": target_wl,
+            "target_cpd": target_cpd,
         },
         "stages": [],
     }
@@ -85,7 +96,6 @@ def run_random_experiment(
         ],
     )
     csv_writer.writeheader()
-    csv_writer.writeheader()
 
     stage = 1
     stage_data = {"stage": stage, "num_actions": env.num_actions, "steps": []}
@@ -99,16 +109,21 @@ def run_random_experiment(
     all_rewards = []
     action_counts = np.zeros(num_actions, dtype=int)
 
+    # Start timer for timeout mode
+    experiment_start_time = time.time()
+
     print("Starting placement...")
 
     # done indicates whether the RL process is terminated or not
     while not done:
-        action = avail_arms[
-            randint(num_actions)
-        ]  # Provide an action from agent, here random search is used as agent
-        _, reward, done, info = env.step(
-            action
-        )  # pass the action to environment via env.step()
+        # Check timeout
+        if timeout is not None and (time.time() - experiment_start_time) > timeout:
+            print(f"\nTimeout reached ({timeout}s), terminating experiment...")
+            episode_log["termination_reason"] = "timeout"
+            break
+        # Provide an action from agent
+        action = avail_arms[randint(num_actions)]
+        _, reward, done, info = env.step(action)
 
         # Track action selection
         action_counts[action] += 1
@@ -119,6 +134,16 @@ def run_random_experiment(
             # Normal step with reward
             step += 1
             all_rewards.append(reward)
+
+            # Check target conditions
+            if target_wl is not None and "WL" in info and info["WL"] <= target_wl:
+                print(f"\nTarget wire length reached: {info['WL']} <= {target_wl}")
+                episode_log["termination_reason"] = "target_wl_reached"
+                done = True
+            elif target_cpd is not None and "CPD" in info and info["CPD"] <= target_cpd:
+                print(f"\nTarget CPD reached: {info['CPD']} <= {target_cpd}")
+                episode_log["termination_reason"] = "target_cpd_reached"
+                done = True
 
             # Write to CSV
             if step % log_steps == 0:
@@ -192,6 +217,12 @@ def run_random_experiment(
         }
     except Exception as e:
         print("ERROR: coult not access final info: ", e)
+        episode_log["results"] = {}
+
+    # Add termination info
+    if "termination_reason" not in episode_log:
+        episode_log["termination_reason"] = "completed"
+    episode_log["elapsed_time"] = time.time() - experiment_start_time
 
     # Add reward distribution analysis
     episode_log["reward_analysis"] = {
@@ -224,6 +255,9 @@ def run_random_experiment(
     print(f"Min: {episode_log['reward_analysis']['min']:.6f}")
     print(f"Max: {episode_log['reward_analysis']['max']:.6f}")
     print(f"Median: {episode_log['reward_analysis']['median']:.6f}")
+
+    # Revert to base directory
+    os.chdir(prior_path)
 
     return episode_log
 
