@@ -93,6 +93,8 @@ def run_random_experiment(
             "delta",
             "delta_bb",
             "delta_time",
+            "wire_len",
+            "crit_path_del",
         ],
     )
     csv_writer.writeheader()
@@ -153,9 +155,10 @@ def run_random_experiment(
                         "step": step,
                         "action": int(action),
                         "reward": float(reward),
-                        "delta": float(info["delta"]),
                         "delta_bb": float(info["delta_bb"]),
                         "delta_time": float(info["delta_time"]),
+                        "wire_len": float(info.get("WL", 0.0)),
+                        "crit_path_del": float(info.get("CPD", 0.0)),
                     }
                 )
 

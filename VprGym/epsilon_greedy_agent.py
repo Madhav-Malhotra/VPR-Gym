@@ -21,8 +21,8 @@ def run_epsilon_greedy_experiment(
     arch="vtr_flow/arch/titan/stratixiv_arch.timing.xml",
     benchmark="vtr_flow/benchmarks/titan_blif/stereo_vision_stratixiv_arch_timing.blif",
     reward_func="WLbiased_runtime_aware",
-    policy='epsilon_greedy',
-    averaging='sample',
+    policy="epsilon_greedy",
+    averaging="sample",
     epsilon=0.1,
     temperature=1.0,
     alpha=0.1,
@@ -80,7 +80,7 @@ def run_epsilon_greedy_experiment(
         averaging=averaging,
         epsilon=epsilon,
         temperature=temperature,
-        alpha=alpha
+        alpha=alpha,
     )
 
     # Experiment tracking
@@ -119,6 +119,8 @@ def run_epsilon_greedy_experiment(
             "delta_time",
             "best_action",
             "best_Q",
+            "wire_len",
+            "crit_path_del",
         ],
     )
     csv_writer.writeheader()
@@ -177,11 +179,11 @@ def run_epsilon_greedy_experiment(
                         "reward": float(reward),
                         "Q_value": float(agent.Q[action]),
                         "action_count": int(agent.action_counts[action]),
-                        "delta": float(info["delta"]),
                         "delta_bb": float(info["delta_bb"]),
                         "delta_time": float(info["delta_time"]),
-                        "best_action": int(np.argmax(agent.Q)),
                         "best_Q": float(np.max(agent.Q)),
+                        "wire_len": float(info.get("WL", 0.0)),
+                        "crit_path_del": float(info.get("CPD", 0.0)),
                     }
                 )
 

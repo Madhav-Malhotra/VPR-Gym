@@ -220,6 +220,8 @@ def run_fsm_experiment(
             "delta_bb",
             "delta_time",
             "best_state",
+            "wire_len",
+            "crit_path_del",
         ],
     )
     csv_writer.writeheader()
@@ -272,10 +274,10 @@ def run_fsm_experiment(
                         "action": int(action),
                         "reward": float(reward),
                         "state": int(agent.states[action]),
-                        "delta": float(info["delta"]),
                         "delta_bb": float(info["delta_bb"]),
                         "delta_time": float(info["delta_time"]),
-                        "best_state": int(np.max(agent.states)),
+                        "wire_len": float(info.get("WL", 0.0)),
+                        "crit_path_del": float(info.get("CPD", 0.0)),
                     }
                 )
 

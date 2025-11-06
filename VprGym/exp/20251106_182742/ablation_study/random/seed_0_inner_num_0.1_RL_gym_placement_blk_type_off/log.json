@@ -1,0 +1,62 @@
+{
+  "config": {
+    "agent": "random",
+    "inner_num": 0.1,
+    "seed": 0,
+    "benchmark": "vtr_flow/benchmarks/titan_blif/stereo_vision_stratixiv_arch_timing.blif",
+    "reward_func": "WLbiased_runtime_aware",
+    "timeout": 300,
+    "target_wl": null,
+    "target_cpd": null
+  },
+  "stages": [
+    {
+      "stage": 1,
+      "num_actions": 4,
+      "steps": [],
+      "statistics": {
+        "action_counts": [
+          173052,
+          172235,
+          171838,
+          171742
+        ],
+        "avg_reward": 1.4674039653575586e-05,
+        "std_reward": 7.61715133680817e-05
+      }
+    },
+    {
+      "stage": 2,
+      "num_actions": 7,
+      "steps": [],
+      "statistics": {
+        "action_counts": [
+          15140,
+          14985,
+          15016,
+          15106,
+          15082,
+          15139,
+          15035
+        ],
+        "avg_reward": 1.3154670127698998e-05,
+        "std_reward": 7.629598765039058e-05
+      }
+    }
+  ],
+  "results": {
+    "wire_length": 595501,
+    "critical_path_delay": 7.54774,
+    "runtime": 177.74,
+    "total_swaps": 798301
+  },
+  "termination_reason": "completed",
+  "elapsed_time": 207.7362928390503,
+  "reward_analysis": {
+    "mean": 1.3154670127698998e-05,
+    "std": 7.629598765039058e-05,
+    "min": -0.000192,
+    "max": 0.008853,
+    "median": 0.0
+  }
+}

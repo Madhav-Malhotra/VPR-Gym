@@ -12,7 +12,15 @@ import subprocess
 import sys
 
 
-def run_experiment(script_name, experiment_name, port, output_dir, timeout=None, target_wl=None, target_cpd=None):
+def run_experiment(
+    script_name,
+    experiment_name,
+    port,
+    output_dir,
+    timeout=None,
+    target_wl=None,
+    target_cpd=None,
+):
     """
     Run a single experiment in the current process.
 
@@ -43,7 +51,7 @@ def run_experiment(script_name, experiment_name, port, output_dir, timeout=None,
             output_dir=str(output_dir / "random"),
             timeout=timeout,
             target_wl=target_wl,
-            target_cpd=target_cpd
+            target_cpd=target_cpd,
         )
 
     elif "fsm" in script_name:
@@ -56,7 +64,7 @@ def run_experiment(script_name, experiment_name, port, output_dir, timeout=None,
             reward_threshold=0.00001,
             timeout=timeout,
             target_wl=target_wl,
-            target_cpd=target_cpd
+            target_cpd=target_cpd,
         )
 
     elif "epsilon" in script_name:
@@ -68,7 +76,7 @@ def run_experiment(script_name, experiment_name, port, output_dir, timeout=None,
             output_dir=str(output_dir / "epsilon_greedy"),
             timeout=timeout,
             target_wl=target_wl,
-            target_cpd=target_cpd
+            target_cpd=target_cpd,
         )
 
     else:
@@ -149,7 +157,7 @@ def run_ablation_study(timeout=None, target_wl=None, target_cpd=None):
             output_dir,
             timeout=timeout,
             target_wl=target_wl,
-            target_cpd=target_cpd
+            target_cpd=target_cpd,
         )
 
         if result:
@@ -171,4 +179,4 @@ def run_ablation_study(timeout=None, target_wl=None, target_cpd=None):
 
 
 if __name__ == "__main__":
-    run_ablation_study()
+    run_ablation_study(timeout=300)
